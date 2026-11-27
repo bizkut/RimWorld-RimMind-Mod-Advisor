@@ -38,6 +38,7 @@ namespace RimMind.Advisor.Overseer
         private readonly IAdvisorToolCallExecutor _executor = new AdvisorToolCallExecutor();
         private ColonyOverseerMapState? _state;
         private int _startedTick = -1;
+        private bool _freeQueryRoundUsed;
 
         public ColonyOverseerDriver(int mapId)
         {
@@ -204,7 +205,12 @@ namespace RimMind.Advisor.Overseer
                 });
             }
 
-            if (_session.CanRequestFeedback(MaxFeedbackRounds))
+            // A turn that only looked (query tools) gets one extra round, so looking before acting does not use up
+            // the turns meant for actions (observed: two query-only turns, no action).
+            if (calls.All(c => ColonyOverseerPolicy.IsQueryTool(c.Name)))
+                _freeQueryRoundUsed = true;
+            int budget = MaxFeedbackRounds + (_freeQueryRoundUsed ? 1 : 0);
+            if (_session.CanRequestFeedback(budget))
             {
                 RequestFeedback(calls, results);
                 return;
@@ -263,6 +269,7 @@ namespace RimMind.Advisor.Overseer
         {
             _session.Clear();
             _startedTick = -1;
+            _freeQueryRoundUsed = false;
             _state = null;
         }
 

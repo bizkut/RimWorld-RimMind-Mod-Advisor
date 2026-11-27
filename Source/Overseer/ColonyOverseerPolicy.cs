@@ -96,6 +96,12 @@ namespace RimMind.Advisor.Overseer
                 memory.RemoveRange(0, memory.Count - MaxMemoryEntries);
         }
 
+        /// <summary>Read-only tools (inspect, do not change the colony): ids containing "query" or "help".</summary>
+        public static bool IsQueryTool(string? toolId) =>
+            !string.IsNullOrEmpty(toolId)
+            && (toolId!.IndexOf("query", StringComparison.OrdinalIgnoreCase) >= 0
+                || toolId.IndexOf("help", StringComparison.OrdinalIgnoreCase) >= 0);
+
         /// <summary>Recent overseer actions for the prompt, newest last, with relative in-game time.</summary>
         public static string FormatMemory(IReadOnlyList<ColonyPlanEntry> memory, int nowTick)
         {

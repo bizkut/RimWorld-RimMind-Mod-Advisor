@@ -40,6 +40,15 @@ namespace RimMind.Advisor.Tests.Contracts
         }
 
         [Fact]
+        public void Query_tools_are_recognised_and_actions_are_not()
+        {
+            Assert.True(ColonyOverseerPolicy.IsQueryTool("actions_query_buildable_structures"));
+            Assert.True(ColonyOverseerPolicy.IsQueryTool("query_tool_help"));
+            Assert.False(ColonyOverseerPolicy.IsQueryTool("actions_place_blueprint"));
+            Assert.False(ColonyOverseerPolicy.IsQueryTool(null));
+        }
+
+        [Fact]
         public void Memory_is_capped_and_formats_failures_with_their_cause()
         {
             var memory = new List<ColonyPlanEntry>();
