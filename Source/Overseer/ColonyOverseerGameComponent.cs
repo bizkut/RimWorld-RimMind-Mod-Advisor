@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using RimMind.Advisor.Perception;
+using RimMind.Presentation.Agent;
 using RimMind.Presentation.Api;
+using UnityEngine;
 using Verse;
 
 namespace RimMind.Advisor.Overseer
@@ -14,6 +16,11 @@ namespace RimMind.Advisor.Overseer
     public sealed class ColonyOverseerGameComponent : GameComponent
     {
         private const int EvaluateEveryTicks = 250;
+        private const int MaxChoiceAttempts = 2;
+
+        private float _nextChoiceCheck;
+        private readonly Dictionary<string, int> _choiceAttempts = new Dictionary<string, int>();
+        private string _lastPendingKey = string.Empty;
 
         private Dictionary<int, ColonyOverseerMapState> _maps = new Dictionary<int, ColonyOverseerMapState>();
         private readonly Dictionary<int, ColonyOverseerDriver> _drivers = new Dictionary<int, ColonyOverseerDriver>();
@@ -34,12 +41,10 @@ namespace RimMind.Advisor.Overseer
             {
                 if (map == null || !map.IsPlayerHome) continue;
 
-                if (!_drivers.TryGetValue(map.uniqueID, out var driver))
-                    _drivers[map.uniqueID] = driver = new ColonyOverseerDriver(map.uniqueID);
+                var driver = GetDriver(map);
                 if (driver.IsBusy(now)) continue;
 
-                if (!_maps.TryGetValue(map.uniqueID, out var state))
-                    _maps[map.uniqueID] = state = new ColonyOverseerMapState();
+                var state = GetState(map);
 
                 var macro = ColonyMacroPerceiver.Evaluate(ColonyMacroPerceiver.CaptureSnapshot(map));
                 var keys = ColonyOverseerPolicy.BottleneckKeys(macro.CriticalBottlenecks);
@@ -53,6 +58,77 @@ namespace RimMind.Advisor.Overseer
                 state.LastBottlenecks = keys;
                 driver.Run(map, macro, state, reason);
             }
+        }
+
+        /// <summary>
+        /// Popups pause the game, so ticks stop: check every real second (also while paused) and run a decision as
+        /// soon as a popup or decision letter waits. A popup still unanswered after <see cref="MaxChoiceAttempts"/>
+        /// decisions is closed so the game never stays frozen (letters stay in the letter stack).
+        /// </summary>
+        public override void GameComponentUpdate()
+        {
+            var settings = RimMindAdvisorMod.Settings;
+            bool active = settings != null && settings.enableColonyOverseer && RimMindAPI.Settings.IsConfigured();
+            PendingChoices.AutoAnswerActive = active;
+            if (!active || Time.realtimeSinceStartup < _nextChoiceCheck) return;
+            _nextChoiceCheck = Time.realtimeSinceStartup + 1f;
+
+            var map = Find.AnyPlayerHomeMap;
+            if (map == null) return;
+            var pending = PendingChoices.Collect();
+            string pendingKey = string.Join(",", pending.ConvertAll(c => c.Id));
+            if (pendingKey != _lastPendingKey)
+            {
+                _lastPendingKey = pendingKey;
+                Log.Message(pending.Count == 0
+                    ? "[RimMind-Overseer] no popup waiting."
+                    : "[RimMind-Overseer] popups waiting: " + string.Join("; ", pending.ConvertAll(c =>
+                        $"{c.Id} \"{c.Title}\" \"{(c.Text.Length > 80 ? c.Text.Substring(0, 80) + "…" : c.Text)}\" ({c.Options.Count} options: "
+                        + string.Join(" | ", c.Options.ConvertAll(o => o.Text)) + ")")));
+            }
+            if (pending.Count == 0)
+            {
+                _choiceAttempts.Clear();
+                return;
+            }
+
+            var driver = GetDriver(map);
+            if (driver.IsBusy(Find.TickManager.TicksGame)) return;
+
+            foreach (var choice in pending)
+            {
+                _choiceAttempts.TryGetValue(choice.Id, out int attempts);
+                if (attempts >= MaxChoiceAttempts)
+                {
+                    if (!choice.Id.StartsWith("letter:", System.StringComparison.Ordinal))
+                    {
+                        Log.Warning($"[RimMind-Overseer] popup {choice.Id} \"{choice.Title}\" unanswered after {attempts} decisions; closing it.");
+                        PendingChoices.Dismiss(choice.Id);
+                    }
+                    continue;
+                }
+
+                _choiceAttempts[choice.Id] = attempts + 1;
+                var macro = ColonyMacroPerceiver.Evaluate(ColonyMacroPerceiver.CaptureSnapshot(map));
+                string label = choice.Title.Length > 0 ? choice.Title
+                    : choice.Text.Length > 60 ? choice.Text.Substring(0, 60) + "…" : choice.Text;
+                driver.Run(map, macro, GetState(map), $"popup waiting: {label}");
+                return;
+            }
+        }
+
+        private ColonyOverseerDriver GetDriver(Map map)
+        {
+            if (!_drivers.TryGetValue(map.uniqueID, out var driver))
+                _drivers[map.uniqueID] = driver = new ColonyOverseerDriver(map.uniqueID);
+            return driver;
+        }
+
+        private ColonyOverseerMapState GetState(Map map)
+        {
+            if (!_maps.TryGetValue(map.uniqueID, out var state))
+                _maps[map.uniqueID] = state = new ColonyOverseerMapState();
+            return state;
         }
 
         public override void ExposeData()

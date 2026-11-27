@@ -7,10 +7,12 @@ using RimMind.Advisor.Perception;
 using RimMind.Application.Common.Models.Tools;
 using RimMind.Application.Features.Json;
 using RimMind.Application.Features.Llm;
+using RimMind.Application.Features.Telemetry;
 using RimMind.Domain.Common;
 using RimMind.Domain.Llm;
 using RimMind.Domain.ValueObjects;
 using RimMind.Presentation.Agent;
+using Newtonsoft.Json.Linq;
 using RimMind.Presentation.Api;
 using RimWorld;
 using Verse;
@@ -29,6 +31,7 @@ namespace RimMind.Advisor.Overseer
         public const int MaxCallsPerTurn = 3;
         private const int MaxFeedbackRounds = 2;
         private const int StaleRequestTicks = 60000;
+        private const float StaleRequestRealSeconds = 300f;
 
         private readonly int _mapId;
         private readonly string _npcId;
@@ -38,6 +41,7 @@ namespace RimMind.Advisor.Overseer
         private readonly IAdvisorToolCallExecutor _executor = new AdvisorToolCallExecutor();
         private ColonyOverseerMapState? _state;
         private int _startedTick = -1;
+        private float _startedRealtime;
         private bool _freeQueryRoundUsed;
 
         public ColonyOverseerDriver(int mapId)
@@ -46,10 +50,12 @@ namespace RimMind.Advisor.Overseer
             _npcId = $"colony-{mapId}";
         }
 
-        /// <summary>A cycle is running. A request that never completes is released after one in-game day.</summary>
+        /// <summary>A cycle is running. A request that never completes is released after one in-game day or five real
+        /// minutes (popups pause the game, so ticks alone could keep it busy forever).</summary>
         public bool IsBusy(int nowTick)
         {
-            if (_startedTick >= 0 && nowTick - _startedTick > StaleRequestTicks)
+            if (_startedTick >= 0 && (nowTick - _startedTick > StaleRequestTicks
+                    || UnityEngine.Time.realtimeSinceStartup - _startedRealtime > StaleRequestRealSeconds))
             {
                 Log.Warning($"[RimMind-Overseer] map {_mapId}: request never completed, releasing.");
                 Finish();
@@ -68,17 +74,26 @@ namespace RimMind.Advisor.Overseer
 
             _state = state;
             _startedTick = Find.TickManager.TicksGame;
+            _startedRealtime = UnityEngine.Time.realtimeSinceStartup;
             _session.Begin(tools, null);
             Log.Message($"[RimMind-Overseer] map {_mapId}: deciding ({reason}), {tools.Count} tools.");
+            LiveEvents.Emit("decision", new JObject
+            {
+                ["source"] = "overseer", ["npc"] = _npcId, ["pawn"] = null, ["action"] = "colony_decision", ["reason"] = reason,
+            });
             Send(BuildMessages(map, macro, state));
         }
 
+        /// <summary>Colony build/manage tools plus the popup tools (mechanism <c>world.dialog</c>, world-admin scope so
+        /// colonist agents never get them; no other world-admin tool is given to the overseer).</summary>
         private static List<StructuredTool>? BuildTools()
         {
             var defs = RimMindAPI.ToolSet.GetDefinitionsForScope(
                 ToolScope.ColonyBuild | ToolScope.ColonyManage,
-                compactSchema: true);
+                compactSchema: true)?.ToList();
             if (defs == null || defs.Count == 0) return null;
+            defs.AddRange(RimMindAPI.ToolSet.GetDefinitionsForScope(ToolScope.WorldAdmin, compactSchema: true)
+                .Where(d => IsDialogTool(d.Id) && defs.All(e => e.Id != d.Id)));
             return defs.Select(d => new StructuredTool
             {
                 Name = d.Id,
@@ -86,6 +101,10 @@ namespace RimMind.Advisor.Overseer
                 Parameters = d.ParametersSchema,
             }).ToList();
         }
+
+        private static bool IsDialogTool(string? id) =>
+            id != null && (id.StartsWith("world.dialog.", StringComparison.Ordinal)
+                || id.StartsWith("world_dialog_", StringComparison.Ordinal));
 
         /// <summary>L0 rules (static) → L1 map topology (rarely changes) → L2 volatile state (moved to the final user
         /// turn by the wire codec) → decision prompt.</summary>
@@ -102,6 +121,20 @@ namespace RimMind.Advisor.Overseer
             volatileState.AppendLine(BuildColonistRoster(map));
             volatileState.AppendLine("[recent_colony_actions]");
             volatileState.AppendLine(ColonyOverseerPolicy.FormatMemory(state.Memory, now));
+            var pending = PendingChoices.Collect();
+            if (pending.Count > 0)
+            {
+                volatileState.AppendLine("[pending_choices] answer these first (world_dialog_trigger action=choose)");
+                foreach (var choice in pending)
+                {
+                    string text = choice.Text.Length > 700 ? choice.Text.Substring(0, 700) + "…" : choice.Text;
+                    volatileState.Append("- choice_id ").Append(choice.Id);
+                    if (choice.Title.Length > 0) volatileState.Append(" \"").Append(choice.Title).Append('"');
+                    volatileState.Append(": ").AppendLine(text.Replace("\n", " "));
+                    volatileState.Append("  options: ").AppendLine(string.Join(" | ", choice.Options.Select(o =>
+                        $"{o.Index}) {o.Text}" + (o.Disabled ? $" [disabled: {o.DisabledReason}]" : string.Empty))));
+                }
+            }
             volatileState.Append("</layer_L2>");
 
             return new List<ChatMessage>
@@ -111,7 +144,8 @@ namespace RimMind.Advisor.Overseer
                 {
                     Role = "system",
                     LayerTag = "L1",
-                    Content = "<layer_L1>\n[map_structure] " + mapContext.BuildStaticMapTopology(map).TrimEnd() + "\n</layer_L1>",
+                    Content = "<layer_L1>\n[map_structure] " + mapContext.BuildStaticMapTopology(map).TrimEnd()
+                        + "\n" + MapGeographyBuilder.Get(map).Text + "\n</layer_L1>",
                 },
                 new ChatMessage { Role = "system", LayerTag = "L2", Content = volatileState.ToString() },
                 new ChatMessage { Role = "user", Content = ColonyOverseerPolicy.DecisionPrompt },
@@ -195,6 +229,11 @@ namespace RimMind.Advisor.Overseer
                 var res = i < results.Count ? results[i] : ToolResult.Fail("no result", call.Id, call.Name);
                 string reason = ToolCallSummaryFormatter.ExtractToolCallReason(call) ?? string.Empty;
                 Log.Message($"[RimMind-Overseer] map {_mapId}: {call.Name} → {(res.IsError ? "FAILED" : "ok")} {Trim(res.Content)} args={Trim(call.Arguments)}");
+                LiveEvents.Emit("action", new JObject
+                {
+                    ["source"] = "overseer", ["npc"] = _npcId, ["pawn"] = null, ["tool"] = call.Name,
+                    ["args"] = Trim(call.Arguments), ["ok"] = !res.IsError, ["result"] = Trim(res.Content), ["reason"] = reason,
+                });
                 ColonyOverseerPolicy.Remember(_state.Memory, new ColonyPlanEntry
                 {
                     Tick = now,

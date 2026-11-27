@@ -136,6 +136,11 @@ namespace RimMind.Advisor.Overseer
             "placing structures. Do not repeat an action from the recent-actions list unless it failed or its effect is " +
             "gone. If something failed, fix the cause or choose another action. If everything urgent is handled, advance " +
             "the next priority.\n" +
+            "Popups: when [pending_choices] lists a popup or letter waiting for the player, answer it first with " +
+            "world_dialog_trigger {\"action\":\"choose\",\"choice_id\":<id>,\"option\":<number>}. Decide as a careful " +
+            "player: accept people who join when the colony is short-handed unless they bring danger the colony cannot " +
+            "handle; refuse deals that cost colonists or more than the colony can afford; \"Jump to location\" and " +
+            "\"Postpone\" decide nothing.\n" +
             "</layer_L0>";
 
         public const string DecisionPrompt =
