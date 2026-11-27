@@ -22,6 +22,12 @@ namespace RimMind.Advisor.Advisor
     {
         public const int MaxToolCallDepth = 3;
 
+        /// <summary>
+        /// Advisor replies are short (400 tokens), but reasoning models spend the budget thinking and return empty
+        /// content; honour a larger player-configured budget.
+        /// </summary>
+        private static int AdvisorMaxTokens => Math.Max(400, RimMindAPI.Settings.MaxTokens);
+
         private readonly Pawn _pawn;
         private readonly RimMindAdvisorSettings _settings;
 
@@ -65,7 +71,7 @@ namespace RimMind.Advisor.Advisor
                 _settings.advisorCustomPrompt,
                 reactionsText,
                 tools,
-                400,
+                AdvisorMaxTokens,
                 0.7f,
                 expireAtTicks,
                 macroAugmentation);
@@ -181,7 +187,7 @@ namespace RimMind.Advisor.Advisor
                 .WithMessages(messages)
                 .WithTools(_feedbackSession.Tools)
                 .WithToolDispatchMode(ToolCallDispatchMode.Manual)
-                .WithMaxTokens(400)
+                .WithMaxTokens(AdvisorMaxTokens)
                 .WithTemperature(0.7f)
                 .WithExpireAtTicks(expireAtTicks)
                 .Build();
