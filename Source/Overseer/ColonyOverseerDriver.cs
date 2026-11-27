@@ -147,7 +147,7 @@ namespace RimMind.Advisor.Overseer
                     Role = "system",
                     LayerTag = "L1",
                     Content = "<layer_L1>\n[map_structure] " + mapContext.BuildStaticMapTopology(map).TrimEnd()
-                        + "\n" + MapGeographyBuilder.Get(map).Text + "\n</layer_L1>",
+                        + "\n" + MapGeographyBuilder.Get(map).Text + "\n" + BasePlanViewBuilder.Get(map) + "\n</layer_L1>",
                 },
                 new ChatMessage { Role = "system", LayerTag = "L2", Content = volatileState.ToString() },
                 new ChatMessage { Role = "user", Content = ColonyOverseerPolicy.DecisionPrompt },
