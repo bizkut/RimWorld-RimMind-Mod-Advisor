@@ -154,21 +154,28 @@ namespace RimMind.Advisor.Overseer
             };
         }
 
-        /// <summary>Colonists with ids and their best skills, so work and construction go to the right people.</summary>
+        private static readonly string[] RosterSkills = { "Construction", "Plants", "Cooking", "Medicine", "Mining", "Shooting", "Melee" };
+
+        /// <summary>Colonists with ids and their key work skills (disabled ones marked), so work and construction go to
+        /// the right people — a top-3 list hid that every builder was unskilled.</summary>
         private static string BuildColonistRoster(Map map)
         {
             var sb = new StringBuilder();
             foreach (var pawn in map.mapPawns.FreeColonistsSpawned)
             {
-                var skills = pawn.skills?.skills?
-                    .Where(s => !s.TotallyDisabled)
-                    .OrderByDescending(s => s.Level)
-                    .Take(3)
-                    .Select(s => $"{s.def.defName} {s.Level}");
                 sb.Append("- ").Append(pawn.Name?.ToStringShort ?? pawn.LabelShort)
                   .Append(" (pawn_id: ").Append(pawn.thingIDNumber).Append(')');
                 if (pawn.Downed) sb.Append(" [downed]");
-                if (skills != null) sb.Append(": ").Append(string.Join(", ", skills));
+                if (pawn.DevelopmentalStage.Child()) sb.Append(" [child]");
+                var skills = pawn.skills?.skills;
+                if (skills != null)
+                {
+                    sb.Append(": ").Append(string.Join(", ", RosterSkills.Select(name =>
+                    {
+                        var skill = skills.FirstOrDefault(s => s.def.defName == name);
+                        return skill == null ? null : skill.TotallyDisabled ? $"{name} disabled" : $"{name} {skill.Level}";
+                    }).Where(s => s != null)));
+                }
                 sb.AppendLine();
             }
             return sb.ToString().TrimEnd();
