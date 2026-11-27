@@ -271,6 +271,7 @@ namespace RimMind.Presentation.Api
             public static bool IsConfigured() => true;
             public static bool DebugLogging => false;
             public static float ActivityFrequencyScale { get; set; } = 1f;
+            public static int MaxTokens { get; set; } = 800;
         }
 
         public static bool IsConfigured() => Settings.IsConfigured();
