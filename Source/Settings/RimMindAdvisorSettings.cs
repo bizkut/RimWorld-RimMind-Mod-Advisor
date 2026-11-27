@@ -50,6 +50,15 @@ namespace RimMind.Advisor.Settings
         /// <summary>自定义系统提示词。插入到最后一个 system 消息之后。</summary>
         public string advisorCustomPrompt = string.Empty;
 
+        /// <summary>
+        /// Colony overseer: one colony-level decision loop that builds, sets bills/zones and plans with player
+        /// authority. Off by default; enabling it is the player's consent.
+        /// </summary>
+        public bool enableColonyOverseer = false;
+
+        /// <summary>Overseer cadence in ticks (default 15000 = 6 in-game hours); new bottlenecks can trigger earlier.</summary>
+        public int colonyOverseerIntervalTicks = Overseer.ColonyOverseerPolicy.DefaultIntervalTicks;
+
         public override void ExposeData()
         {
             Scribe_Values.Look(ref enableAdvisor, "enableAdvisor", true);
@@ -67,6 +76,9 @@ namespace RimMind.Advisor.Settings
             Scribe_Values.Look(ref enableRiskApproval, "enableRiskApproval", true);
             Scribe_Values.Look(ref autoBlockRiskLevel, "autoBlockRiskLevel", RiskLevel.High);
             Scribe_Values.Look(ref advisorCustomPrompt, "advisorCustomPrompt", string.Empty);
+            Scribe_Values.Look(ref enableColonyOverseer, "enableColonyOverseer", false);
+            Scribe_Values.Look(ref colonyOverseerIntervalTicks, "colonyOverseerIntervalTicks",
+                Overseer.ColonyOverseerPolicy.DefaultIntervalTicks);
         }
     }
 }

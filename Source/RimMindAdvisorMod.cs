@@ -23,6 +23,9 @@ namespace RimMind.Advisor
             RimMindAPI.Extensions<IModCooldown>().Register(new AdvisorModCooldown(Settings));
             RimMindAPI.Extensions<ISkipCheck>().Register(new AdvisorActionSkipCheck());
             AdvisorProviderRegistrar.RegisterAll();
+            RimMindAPI.Extensions<IModCooldown>().Register(new Overseer.ColonyOverseerModCooldown());
+            RimMindAPI.Context.RegisterScenario(Overseer.ColonyOverseerDriver.ScenarioId, 0,
+                "Colony overseer: colony-level decisions (construction, food, storage, bills, work)");
 
             Log.Message("[RimMind-Advisor] Initialized.");
         }

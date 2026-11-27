@@ -48,6 +48,7 @@
     <Compile Include="../Source/Extensions/AdvisorPromptHelper.cs" />
     <Compile Include="../Source/Concurrency/AdvisorRequestCapacity.cs" />
     <Compile Include="../Source/Perception/ColonyMacroPerceiver.cs" />
+    <Compile Include="../Source/Overseer/ColonyOverseerPolicy.cs" />
   </ItemGroup>
 
   <ItemGroup>
