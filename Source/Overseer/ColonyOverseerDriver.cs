@@ -121,6 +121,8 @@ namespace RimMind.Advisor.Overseer
             volatileState.AppendLine(BuildColonistRoster(map));
             volatileState.AppendLine("[recent_colony_actions]");
             volatileState.AppendLine(ColonyOverseerPolicy.FormatMemory(state.Memory, now));
+            string alerts = ColonySafetyNet.FormatForPrompt();
+            if (alerts.Length > 0) volatileState.AppendLine(alerts);
             var pending = PendingChoices.Collect();
             if (pending.Count > 0)
             {

@@ -48,6 +48,8 @@ namespace RimMind.Advisor.Overseer
 
                 var macro = ColonyMacroPerceiver.Evaluate(ColonyMacroPerceiver.CaptureSnapshot(map));
                 var keys = ColonyOverseerPolicy.BottleneckKeys(macro.CriticalBottlenecks);
+                foreach (var alert in ColonySafetyNet.Alerts)
+                    keys.Add($"[Alert:{alert.Code} {alert.Subject}]");
                 if (!ColonyOverseerPolicy.ShouldRun(now, state.LastRunTick, keys, state.LastBottlenecks,
                         settings.colonyOverseerIntervalTicks, out var reason))
                 {
@@ -70,6 +72,7 @@ namespace RimMind.Advisor.Overseer
             var settings = RimMindAdvisorMod.Settings;
             bool active = settings != null && settings.enableColonyOverseer && RimMindAPI.Settings.IsConfigured();
             PendingChoices.AutoAnswerActive = active;
+            ColonySafetyNet.Enabled = active;
             if (!active || Time.realtimeSinceStartup < _nextChoiceCheck) return;
             _nextChoiceCheck = Time.realtimeSinceStartup + 1f;
 
