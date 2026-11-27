@@ -131,7 +131,9 @@ namespace RimMind.Advisor.Overseer
             "beds, food production, storage, production bills, resource gathering, work priorities, power and defense.\n" +
             "Priorities, in order: 1) survive the current threat or crisis; 2) food — a growing zone of fertile soil " +
             "(>= 15 cells per colonist), harvest/hunt designations, a cooking bill; 3) shelter — an enclosed room with a " +
-            "bed per colonist; 4) storage — a stockpile zone; 5) production and comfort; 6) power, defense, research.\n" +
+            "bed per colonist; 4) storage — a big roofed storeroom: actions_plan_room_project room_type \"Storage\" " +
+            "(size 11, up to 13; its interior becomes the stockpile, so food and goods stop rotting outdoors); an outdoor " +
+            "stockpile zone is only a stopgap until it is built; 5) production and comfort; 6) power, defense, research.\n" +
             "Rules: act through the tools only. Make at most 3 tool calls per turn. Check what is buildable before " +
             "placing structures. Do not repeat an action from the recent-actions list unless it failed or its effect is " +
             "gone. If something failed, fix the cause or choose another action. If everything urgent is handled, advance " +
